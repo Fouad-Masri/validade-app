@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Controle de Validade</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            background-color: #f2f2f2;
+        }
+
+        header {
+            background-color: #0d6efd;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .container {
+            padding: 20px;
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        .btn {
+            display: inline-block;
+            background-color: #28a745;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            transition: background-color 0.3s;
+        }
+
+        .btn:hover {
+            background-color: #218838;
+        }
+
+        .btn-edit {
+            background-color: #ffc107;
+            color: #000;
+            padding: 6px 12px;
+            border-radius: 5px;
+            text-decoration: none;
+        }
+
+        .btn-delete {
+            background-color: #dc3545;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 5px;
+            text-decoration: none;
+        }
+
+        .btn-edit:hover { background-color: #e0a800; }
+        .btn-delete:hover { background-color: #c82333; }
+
+        .aviso {
+            background: #ffe600;
+            padding: 15px;
+            font-weight: bold;
+            animation: pisca 1.2s infinite;
+            text-align: center;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+        }
+
+        @keyframes pisca {
+            0% { background-color: #ffe600; color: #000; }
+            50% { background-color: #ff4c4c; color: white; }
+            100% { background-color: #ffe600; color: #000; }
+        }
+
+        .filtros {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filtros input, .filtros select {
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            width: 200px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        th {
+            background-color: #0d6efd;
+            color: white;
+            padding: 12px;
+        }
+
+        td {
+            padding: 12px;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        img {
+            max-width: 80px;
+            border-radius: 6px;
+        }
+
+        /* Classes para o fundo das linhas conforme vencimento */
+        tr.vencimento-vermelho td {
+            background-color: #ffe5e5;
+        }
+
+        tr.vencimento-amarelo td {
+            background-color: #fff9dc;
+        }
+
+        tr.vencimento-verde td {
+            background-color: #e5ffe5;
+        }
+    </style>
+    <script>
+        function filtrarTabela() {
+            let filtro = document.getElementById("busca").value.toLowerCase();
+            let vencFiltro = document.getElementById("filtroVenc").value;
+            let linhas = document.querySelectorAll("tbody tr");
+
+            linhas.forEach(linha => {
+                let codigo = linha.dataset.codigo.toLowerCase();
+                let desc = linha.dataset.descricao.toLowerCase();
+                let dias = parseInt(linha.dataset.dias);
+
+                let matchTexto = codigo.includes(filtro) || desc.includes(filtro);
+                let matchVenc = (
+                    vencFiltro === "" ||
+                    (vencFiltro === "30" && dias <= 30 && dias >= 0) ||
+                    (vencFiltro === "90" && dias <= 90 && dias > 30) ||
+                    (vencFiltro === "vencido" && dias < 0)
+                );
+
+                if (matchTexto && matchVenc) {
+                    linha.style.display = "";
+                } else {
+                    linha.style.display = "none";
+                }
+            });
+        }
+    </script>
+</head>
+<body>
+
+<header>
+    <h1>Controle de Validade</h1>
+</header>
+
+<div class="container">
+
+    {% if aviso %}
+        <div class="aviso">
+            {% for msg in aviso %}
+                <div>{{ msg }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <a href="{{ url_for('cadastrar') }}" class="btn">+ Cadastrar novo produto</a>
+
+    <div class="filtros">
+        <input type="text" id="busca" onkeyup="filtrarTabela()" placeholder="Buscar por código ou descrição...">
+        <select id="filtroVenc" onchange="filtrarTabela()">
+            <option value="">Todos os vencimentos</option>
+            <option value="30">Vence em até 30 dias</option>
+            <option value="90">Vence em até 90 dias</option>
+            <option value="vencido">Vencidos</option>
+        </select>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Foto</th>
+                <th>Código</th>
+                <th>Descrição</th>
+                <th>Quantidade</th>
+                <th>Lote</th>
+                <th>Vencimento</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for p in produtos %}
+        <tr data-codigo="{{ p.codigo }}" data-descricao="{{ p.descricao }}" data-dias="{{ p.dias_restantes }}"
+            class="{% if p.dias_restantes <= 90 %}vencimento-vermelho{% elif p.dias_restantes <= 365 %}vencimento-amarelo{% else %}vencimento-verde{% endif %}">
+            <td>
+                {% if p.foto %}
+                    <img src="{{ url_for('static', filename='uploads/' ~ p.foto) }}" alt="Foto do produto">
+                {% else %}
+                    Sem foto
+                {% endif %}
+            </td>
+            <td>{{ p.codigo }}</td>
+            <td>{{ p.descricao }}</td>
+            <td>{{ p.quantidade }}</td>
+            <td>{{ p.lote }}</td>
+            <td>{{ p.vencimento.strftime('%d/%m/%Y') }}</td>
+            <td>
+                <a href="{{ url_for('editar', id=p.id) }}" class="btn-edit">Editar</a>
+                <a href="{{ url_for('excluir', id=p.id) }}" class="btn-delete">Excluir</a>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+</div>
+
+</body>
+</html>

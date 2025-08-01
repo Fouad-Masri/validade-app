@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8" />
+    <title>Confirmar Exclusão</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f4f6f9;
+            margin: 0; padding: 0;
+        }
+        .container {
+            max-width: 400px;
+            margin: 100px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        h2 {
+            color: #dc3545;
+            margin-bottom: 20px;
+        }
+        p {
+            margin-bottom: 30px;
+            font-size: 18px;
+        }
+        form button {
+            background-color: #dc3545;
+            border: none;
+            padding: 12px 20px;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            transition: background-color 0.3s;
+        }
+        form button:hover {
+            background-color: #b02a37;
+        }
+        a.cancelar {
+            display: inline-block;
+            background-color: #6c757d;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        a.cancelar:hover {
+            background-color: #565e64;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Confirma exclusão?</h2>
+        <p>Deseja realmente excluir o produto <strong>{{ produto['descricao'] }}</strong> (cód: {{ produto['codigo'] }})?</p>
+        <form method="POST">
+            <button type="submit">Sim, excluir</button>
+            <a href="{{ url_for('index') }}" class="cancelar">Cancelar</a>
+        </form>
+    </div>
+</body>
+</html>
