@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Controle de Validade</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
     <style>
         body {
             font-family: 'Segoe UI', sans-serif;
@@ -135,7 +136,14 @@
         tr.vencimento-verde td {
             background-color: #e5ffe5;
         }
+
+        @media print {
+            .btn, .filtros, .aviso, header, td a {
+                display: none !important;
+            }
+        }
     </style>
+
     <script>
         function filtrarTabela() {
             let filtro = document.getElementById("busca").value.toLowerCase();
@@ -155,12 +163,12 @@
                     (vencFiltro === "vencido" && dias < 0)
                 );
 
-                if (matchTexto && matchVenc) {
-                    linha.style.display = "";
-                } else {
-                    linha.style.display = "none";
-                }
+                linha.style.display = (matchTexto && matchVenc) ? "" : "none";
             });
+        }
+
+        function imprimirTabela() {
+            window.print();
         }
     </script>
 </head>
@@ -181,6 +189,7 @@
     {% endif %}
 
     <a href="{{ url_for('cadastrar') }}" class="btn">+ Cadastrar novo produto</a>
+    <button class="btn" onclick="imprimirTabela()">🖨️ Imprimir PDF</button>
 
     <div class="filtros">
         <input type="text" id="busca" onkeyup="filtrarTabela()" placeholder="Buscar por código ou descrição...">
