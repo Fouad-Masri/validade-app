@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>Controle de Validade</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/png">
+
     <style>
         body {
             font-family: 'Segoe UI', sans-serif;
@@ -16,78 +17,79 @@
             color: white;
             padding: 20px;
             text-align: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
 
         .container {
-            padding: 20px;
             max-width: 1200px;
             margin: auto;
+            padding: 20px;
         }
 
         .btn {
-            display: inline-block;
             background-color: #28a745;
             color: white;
-            padding: 10px 20px;
+            padding: 10px 18px;
+            border-radius: 6px;
             text-decoration: none;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            transition: background-color 0.3s;
+            margin: 5px 5px 15px 0;
+            display: inline-block;
         }
 
-        .btn:hover {
-            background-color: #218838;
-        }
+        .btn:hover { background-color: #218838; }
 
         .btn-edit {
             background-color: #ffc107;
-            color: #000;
-            padding: 6px 12px;
-            border-radius: 5px;
-            text-decoration: none;
+            color: black;
         }
 
         .btn-delete {
             background-color: #dc3545;
             color: white;
-            padding: 6px 12px;
-            border-radius: 5px;
-            text-decoration: none;
         }
 
-        .btn-edit:hover { background-color: #e0a800; }
-        .btn-delete:hover { background-color: #c82333; }
+        .btn-logout {
+            background-color: #6c757d;
+        }
 
         .aviso {
-            background: #ffe600;
+            background-color: #ffe600;
+            color: black;
             padding: 15px;
-            font-weight: bold;
-            animation: pisca 1.2s infinite;
+            margin-bottom: 15px;
             text-align: center;
-            margin-bottom: 20px;
+            font-weight: bold;
             border-radius: 6px;
-            box-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+            animation: pisca 1s infinite;
         }
 
         @keyframes pisca {
-            0% { background-color: #ffe600; color: #000; }
+            0%, 100% { background-color: #ffe600; }
             50% { background-color: #ff4c4c; color: white; }
-            100% { background-color: #ffe600; color: #000; }
         }
 
-        .filtros {
+        /* Novo estilo para o contador */
+        .contador {
             display: flex;
-            gap: 15px;
+            justify-content: center;
+            gap: 25px;
             margin-bottom: 20px;
-            flex-wrap: wrap;
+            font-weight: bold;
+            font-size: 1.1em;
         }
-
-        .filtros input, .filtros select {
-            padding: 10px;
-            border-radius: 6px;
-            border: 1px solid #ccc;
-            width: 200px;
+        .contador div {
+            padding: 10px 20px;
+            border-radius: 8px;
+            color: white;
+        }
+        .contador .verde {
+            background-color: #28a745;
+        }
+        .contador .amarelo {
+            background-color: #ffc107;
+            color: black;
+        }
+        .contador .vermelho {
+            background-color: #dc3545;
         }
 
         table {
@@ -96,49 +98,45 @@
             background-color: white;
             border-radius: 10px;
             overflow: hidden;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: center;
         }
 
         th {
             background-color: #0d6efd;
             color: white;
-            padding: 12px;
         }
 
-        td {
-            padding: 12px;
-            text-align: center;
-            vertical-align: middle;
-        }
-
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-
-        tr:hover {
-            background-color: #f1f1f1;
-        }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        tr:hover { background-color: #f1f1f1; }
 
         img {
-            max-width: 80px;
+            max-width: 70px;
+            border-radius: 5px;
+        }
+
+        tr.vermelho td { background-color: #ffd6d6; }
+        tr.amarelo td { background-color: #fff9cc; }
+        tr.verde td { background-color: #e2f7e2; }
+
+        .filtros {
+            margin: 15px 0;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .filtros input, .filtros select {
+            padding: 8px;
+            border: 1px solid #ccc;
             border-radius: 6px;
         }
 
-        /* Classes para o fundo das linhas conforme vencimento */
-        tr.vencimento-vermelho td {
-            background-color: #ffe5e5;
-        }
-
-        tr.vencimento-amarelo td {
-            background-color: #fff9dc;
-        }
-
-        tr.vencimento-verde td {
-            background-color: #e5ffe5;
-        }
-
         @media print {
-            .btn, .filtros, .aviso, header, td a {
+            .btn, .filtros, .aviso, .contador, header, td a {
                 display: none !important;
             }
         }
@@ -146,29 +144,50 @@
 
     <script>
         function filtrarTabela() {
-            let filtro = document.getElementById("busca").value.toLowerCase();
-            let vencFiltro = document.getElementById("filtroVenc").value;
-            let linhas = document.querySelectorAll("tbody tr");
+            const busca = document.getElementById("busca").value.toLowerCase();
+            const filtro = document.getElementById("filtroVenc").value;
+            const linhas = document.querySelectorAll("tbody tr");
 
             linhas.forEach(linha => {
-                let codigo = linha.dataset.codigo.toLowerCase();
-                let desc = linha.dataset.descricao.toLowerCase();
-                let dias = parseInt(linha.dataset.dias);
+                const cod = linha.dataset.codigo.toLowerCase();
+                const desc = linha.dataset.descricao.toLowerCase();
+                const dias = parseInt(linha.dataset.dias);
 
-                let matchTexto = codigo.includes(filtro) || desc.includes(filtro);
-                let matchVenc = (
-                    vencFiltro === "" ||
-                    (vencFiltro === "30" && dias <= 30 && dias >= 0) ||
-                    (vencFiltro === "90" && dias <= 90 && dias > 30) ||
-                    (vencFiltro === "vencido" && dias < 0)
-                );
+                const textoOK = cod.includes(busca) || desc.includes(busca);
+                const vencOK =
+                    filtro === "" ||
+                    (filtro === "30" && dias <= 30 && dias >= 0) ||
+                    (filtro === "90" && dias <= 90 && dias > 30) ||
+                    (filtro === "vencido" && dias < 0);
 
-                linha.style.display = (matchTexto && matchVenc) ? "" : "none";
+                linha.style.display = (textoOK && vencOK) ? "" : "none";
             });
         }
 
         function imprimirTabela() {
             window.print();
+        }
+
+        function pedirSenhaAntes(el) {
+            const url = el.dataset.url;
+            if (localStorage.getItem("autenticado") === "true") {
+                window.location.href = url;
+                return;
+            }
+
+            const senha = prompt("Digite a senha:");
+            if (senha === "1234") {
+                localStorage.setItem("autenticado", "true");
+                window.location.href = url;
+            } else {
+                alert("Senha incorreta.");
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem("autenticado");
+            alert("Você saiu do sistema.");
+            location.reload();
         }
     </script>
 </head>
@@ -181,22 +200,30 @@
 <div class="container">
 
     {% if aviso %}
-        <div class="aviso">
-            {% for msg in aviso %}
-                <div>{{ msg }}</div>
-            {% endfor %}
-        </div>
+    <div class="aviso">
+        {% for msg in aviso %}
+            <div>{{ msg }}</div>
+        {% endfor %}
+    </div>
     {% endif %}
 
-    <a href="{{ url_for('cadastrar') }}" class="btn">+ Cadastrar novo produto</a>
-    <button class="btn" onclick="imprimirTabela()">🖨️ Imprimir PDF</button>
+    <!-- Contador das categorias -->
+    <div class="contador">
+        <div class="verde">Verde: {{ contagem_verde }}</div>
+        <div class="amarelo">Amarelo: {{ contagem_amarelo }}</div>
+        <div class="vermelho">Vermelho: {{ contagem_vermelho }}</div>
+    </div>
+
+    <a href="#" class="btn" onclick="pedirSenhaAntes(this)" data-url="{{ url_for('cadastrar') }}">+ Cadastrar produto</a>
+    <a href="#" class="btn" onclick="imprimirTabela()">🖨️ Imprimir</a>
+    <a href="#" class="btn btn-logout" onclick="logout()">🔒 Logout</a>
 
     <div class="filtros">
-        <input type="text" id="busca" onkeyup="filtrarTabela()" placeholder="Buscar por código ou descrição...">
+        <input type="text" id="busca" onkeyup="filtrarTabela()" placeholder="Buscar...">
         <select id="filtroVenc" onchange="filtrarTabela()">
-            <option value="">Todos os vencimentos</option>
-            <option value="30">Vence em até 30 dias</option>
-            <option value="90">Vence em até 90 dias</option>
+            <option value="">Todos</option>
+            <option value="30">Venc. ≤ 30 dias</option>
+            <option value="90">Venc. ≤ 90 dias</option>
             <option value="vencido">Vencidos</option>
         </select>
     </div>
@@ -207,7 +234,7 @@
                 <th>Foto</th>
                 <th>Código</th>
                 <th>Descrição</th>
-                <th>Quantidade</th>
+                <th>Qtd</th>
                 <th>Lote</th>
                 <th>Vencimento</th>
                 <th>Ações</th>
@@ -215,30 +242,35 @@
         </thead>
         <tbody>
         {% for p in produtos %}
-        <tr data-codigo="{{ p.codigo }}" data-descricao="{{ p.descricao }}" data-dias="{{ p.dias_restantes }}"
-            class="{% if p.dias_restantes <= 90 %}vencimento-vermelho{% elif p.dias_restantes <= 365 %}vencimento-amarelo{% else %}vencimento-verde{% endif %}">
-            <td>
-                {% if p.foto %}
-                    <img src="{{ url_for('static', filename='uploads/' ~ p.foto) }}" alt="Foto do produto">
-                {% else %}
-                    Sem foto
-                {% endif %}
-            </td>
-            <td>{{ p.codigo }}</td>
-            <td>{{ p.descricao }}</td>
-            <td>{{ p.quantidade }}</td>
-            <td>{{ p.lote }}</td>
-            <td>{{ p.vencimento.strftime('%d/%m/%Y') }}</td>
-            <td>
-                <a href="{{ url_for('editar', id=p.id) }}" class="btn-edit">Editar</a>
-                <a href="{{ url_for('excluir', id=p.id) }}" class="btn-delete">Excluir</a>
-            </td>
-        </tr>
+            {% if p.dias_restantes < 91 %}
+                {% set classe = "vermelho" %}
+            {% elif p.dias_restantes < 366 %}
+                {% set classe = "amarelo" %}
+            {% else %}
+                {% set classe = "verde" %}
+            {% endif %}
+            <tr class="{{ classe }}" data-codigo="{{ p.codigo }}" data-descricao="{{ p.descricao }}" data-dias="{{ p.dias_restantes }}">
+                <td>
+                    {% if p.foto %}
+                        <img src="{{ url_for('static', filename='uploads/' + p.foto) }}" alt="Foto">
+                    {% else %}
+                        Sem foto
+                    {% endif %}
+                </td>
+                <td>{{ p.codigo }}</td>
+                <td>{{ p.descricao }}</td>
+                <td>{{ p.quantidade }}</td>
+                <td>{{ p.lote }}</td>
+                <td>{{ p.vencimento.strftime('%d/%m/%Y') }}</td>
+                <td>
+                    <a href="#" class="btn btn-edit" onclick="pedirSenhaAntes(this)" data-url="{{ url_for('editar', id=p.id) }}">Editar</a>
+                    <a href="#" class="btn btn-delete" onclick="pedirSenhaAntes(this)" data-url="{{ url_for('excluir', id=p.id) }}">Excluir</a>
+                </td>
+            </tr>
         {% endfor %}
         </tbody>
     </table>
 
 </div>
-
 </body>
 </html>
