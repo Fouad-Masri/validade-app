@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from werkzeug.utils import secure_filename
 import os
 import sqlite3
@@ -8,6 +8,17 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.secret_key = 'sua-chave-secreta-aqui'
 app.permanent_session_lifetime = timedelta(minutes=15)
+
+@app.route("/verificar_senha", methods=["POST"])
+def verificar_senha():
+    data = request.get_json()
+    senha = data.get("senha")
+
+    # Senha específica para ações (diferente da senha de login)
+    if senha == "operador456":
+        return jsonify({"valido": True})
+    else:
+        return jsonify({"valido": False})
 
 # Criação do banco
 def init_db():

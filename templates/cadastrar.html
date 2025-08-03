@@ -20,10 +20,23 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
 
-        h2 {
-            text-align: center;
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
             margin-bottom: 25px;
+        }
+
+        .header img {
+            max-width: 150px;
+            height: auto;
+        }
+
+        .header h2 {
             color: #0d6efd;
+            margin: 0;
+            font-size: 22px;
         }
 
         label {
@@ -80,7 +93,11 @@
 <body>
 
     <div class="container">
-        <h2>Cadastrar Produto</h2>
+        <div class="header">
+            <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo Mercadinho Piratininga">
+            <h2>Cadastrar Produto</h2>
+        </div>
+
         <form method="POST" enctype="multipart/form-data">
             <label for="codigo">Código:</label>
             <input type="text" name="codigo" id="codigo" required>

@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>Controle de Validade</title>
     <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/png">
-
     <style>
         body {
             font-family: 'Segoe UI', sans-serif;
@@ -16,7 +15,23 @@
             background-color: #0d6efd;
             color: white;
             padding: 20px;
-            text-align: center;
+        }
+
+        .header-flex {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .header-flex img {
+            max-width: 120px;
+            height: auto;
+        }
+
+        .header-flex h1 {
+            font-size: 2em;
         }
 
         .container {
@@ -37,19 +52,9 @@
 
         .btn:hover { background-color: #218838; }
 
-        .btn-edit {
-            background-color: #ffc107;
-            color: black;
-        }
-
-        .btn-delete {
-            background-color: #dc3545;
-            color: white;
-        }
-
-        .btn-logout {
-            background-color: #6c757d;
-        }
+        .btn-edit { background-color: #ffc107; color: black; }
+        .btn-delete { background-color: #dc3545; color: white; }
+        .btn-logout { background-color: #6c757d; }
 
         .aviso {
             background-color: #ffe600;
@@ -67,7 +72,6 @@
             50% { background-color: #ff4c4c; color: white; }
         }
 
-        /* Novo estilo para o contador */
         .contador {
             display: flex;
             justify-content: center;
@@ -76,21 +80,16 @@
             font-weight: bold;
             font-size: 1.1em;
         }
+
         .contador div {
             padding: 10px 20px;
             border-radius: 8px;
             color: white;
         }
-        .contador .verde {
-            background-color: #28a745;
-        }
-        .contador .amarelo {
-            background-color: #ffc107;
-            color: black;
-        }
-        .contador .vermelho {
-            background-color: #dc3545;
-        }
+
+        .contador .verde { background-color: #28a745; }
+        .contador .amarelo { background-color: #ffc107; color: black; }
+        .contador .vermelho { background-color: #dc3545; }
 
         table {
             width: 100%;
@@ -135,9 +134,29 @@
             border-radius: 6px;
         }
 
+        #print-header {
+            display: none;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        #print-header img {
+            max-width: 150px;
+            margin-bottom: 10px;
+        }
+
+        #print-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+
         @media print {
             .btn, .filtros, .aviso, .contador, header, td a {
                 display: none !important;
+            }
+
+            #print-header {
+                display: block;
             }
         }
     </style>
@@ -168,36 +187,57 @@
             window.print();
         }
 
+        function logout() {
+            window.location.href = "/logout";
+        }
+
         function pedirSenhaAntes(el) {
-            const url = el.dataset.url;
-            if (localStorage.getItem("autenticado") === "true") {
-                window.location.href = url;
+            const destino = el.dataset.url;
+
+            if (sessionStorage.getItem('senhaAcoesOK') === 'true') {
+                window.location.href = destino;
                 return;
             }
 
-            const senha = prompt("Digite a senha:");
-            if (senha === "1235") {
-                localStorage.setItem("autenticado", "true");
-                window.location.href = url;
-            } else {
-                alert("Senha incorreta.");
-            }
-        }
+            const senha = prompt("Digite a senha para esta ação:");
+            if (!senha) return;
 
-        function logout() {
-            localStorage.removeItem("autenticado");
-            alert("Você saiu do sistema.");
-            location.reload();
+            fetch("/verificar_senha", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ senha: senha })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.valido) {
+                    sessionStorage.setItem('senhaAcoesOK', 'true');
+                    window.location.href = destino;
+                } else {
+                    alert("❌ Senha incorreta para esta ação.");
+                }
+            })
+            .catch(err => {
+                alert("Erro na verificação da senha.");
+                console.error(err);
+            });
         }
     </script>
 </head>
 <body>
 
 <header>
-    <h1>Controle de Validade</h1>
+    <div class="header-flex">
+        <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo Mercadinho Piratininga">
+        <h1>Controle de Validade</h1>
+    </div>
 </header>
 
 <div class="container">
+
+    <div id="print-header">
+        <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo Mercadinho Piratininga">
+        <h2>Mercadinho Piratininga - Controle de Validade</h2>
+    </div>
 
     {% if aviso %}
     <div class="aviso">
@@ -207,7 +247,6 @@
     </div>
     {% endif %}
 
-    <!-- Contador das categorias -->
     <div class="contador">
         <div class="verde">Verde: {{ contagem_verde }}</div>
         <div class="amarelo">Amarelo: {{ contagem_amarelo }}</div>
@@ -270,7 +309,7 @@
         {% endfor %}
         </tbody>
     </table>
-
 </div>
+
 </body>
 </html>
