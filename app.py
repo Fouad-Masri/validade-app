@@ -93,6 +93,8 @@ def index():
 
     for p in produtos:
         venc = p['vencimento']
+        if isinstance(venc, str):
+         venc = datetime.strptime(venc, '%Y-%m-%d').date()
         dias_restantes = (venc - hoje).days
         p['dias_restantes'] = dias_restantes
         if 0 <= dias_restantes <= 30:
