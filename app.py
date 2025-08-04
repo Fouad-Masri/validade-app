@@ -1,60 +1,79 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from werkzeug.utils import secure_filename
 import os
+import psycopg2
+import psycopg2.extras
+from urllib.parse import urlparse
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
-app.secret_key = 'chave_secreta_para_sessions'
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.secret_key = 'sua-chave-secreta-aqui'
+app.permanent_session_lifetime = timedelta(minutes=15)
 
-# Conexão com PostgreSQL no Render
-DATABASE_URL = os.environ.get("DATABASE_URL") or "postgresql://validade_user:senhaforte123@dpg-xxxx.render.com:5432/validade_db"
-conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-cursor = conn.cursor()
+# URL do banco de dados do Render com SSL
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# Inicializa as tabelas, se não existirem
-def inicializar_banco():
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id SERIAL PRIMARY KEY,
-            nome TEXT NOT NULL,
-            senha TEXT NOT NULL
-        );
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS produtos (
-            id SERIAL PRIMARY KEY,
-            codigo TEXT NOT NULL,
-            descricao TEXT NOT NULL,
-            quantidade INTEGER NOT NULL,
-            lote TEXT NOT NULL,
-            vencimento DATE NOT NULL
-        );
-    ''')
-    conn.commit()
+def get_db_connection():
+    result = urlparse(DATABASE_URL)
+    return psycopg2.connect(
+        dbname=result.path[1:],
+        user=result.username,
+        password=result.password,
+        host=result.hostname,
+        port=result.port,
+        sslmode='require',
+        cursor_factory=psycopg2.extras.DictCursor
+    )
 
-    # Cria o usuário admin se não existir
-    cursor.execute("SELECT * FROM usuarios WHERE nome = %s", ('admin',))
-    if not cursor.fetchone():
-        senha_criptografada = generate_password_hash('admin123')
-        cursor.execute("INSERT INTO usuarios (nome, senha) VALUES (%s, %s)", ('admin', senha_criptografada))
-        conn.commit()
+def init_db():
+    conn = get_db_connection()
+    try:
+        with conn:
+            cur = conn.cursor()
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS produtos (
+                    id SERIAL PRIMARY KEY,
+                    codigo TEXT NOT NULL,
+                    descricao TEXT NOT NULL,
+                    quantidade INTEGER NOT NULL,
+                    lote TEXT,
+                    vencimento DATE NOT NULL,
+                    foto TEXT
+                )
+            ''')
+            conn.commit()
+    finally:
+        conn.close()
 
-inicializar_banco()
+def query_db(query, args=(), one=False, commit=False):
+    conn = get_db_connection()
+    try:
+        with conn:
+            cur = conn.cursor()
+            cur.execute(query, args)
+            if commit:
+                conn.commit()
+            if query.strip().upper().startswith("SELECT"):
+                results = cur.fetchall()
+                return results[0] if one else results
+    finally:
+        conn.close()
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route("/verificar_senha", methods=["POST"])
+def verificar_senha():
+    data = request.get_json()
+    senha = data.get("senha")
+    return jsonify({"valido": senha == "operador456"})
+
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        nome = request.form['nome']
-        senha = request.form['senha']
-        cursor.execute("SELECT * FROM usuarios WHERE nome = %s", (nome,))
-        usuario = cursor.fetchone()
-        if usuario and check_password_hash(usuario['senha'], senha):
-            session['usuario'] = nome
+        senha = request.form.get('senha')
+        if senha == '1234':
+            session['usuario'] = 'admin'
             return redirect(url_for('index'))
-        else:
-            flash("Usuário ou senha incorretos", "error")
+        return render_template('login.html', erro="Senha incorreta.")
     return render_template('login.html')
 
 @app.route('/logout')
@@ -62,58 +81,91 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-@app.route('/index')
+@app.route('/')
 def index():
     if 'usuario' not in session:
         return redirect(url_for('login'))
 
-    cursor.execute("SELECT * FROM produtos ORDER BY vencimento ASC")
-    produtos = cursor.fetchall()
-
+    produtos = query_db("SELECT * FROM produtos ORDER BY vencimento ASC")
     hoje = datetime.today().date()
-    vencendo_em_30_dias = [p for p in produtos if (p['vencimento'] - hoje).days <= 30]
+    aviso = []
+    verde = amarelo = vermelho = 0
 
-    return render_template('index.html', produtos=produtos, vencendo_em_30_dias=vencendo_em_30_dias, usuario=session['usuario'])
+    for p in produtos:
+        venc = p['vencimento']
+        dias_restantes = (venc - hoje).days
+        p['dias_restantes'] = dias_restantes
+        if 0 <= dias_restantes <= 30:
+            aviso.append(f"⚠️ {p['descricao']} (cód: {p['codigo']}) vence em {dias_restantes} dias!")
+        elif dias_restantes < 0:
+            aviso.append(f"❌ {p['descricao']} (cód: {p['codigo']}) está vencido!")
 
-@app.route('/cadastrar_produto', methods=['GET', 'POST'])
-def cadastrar_produto():
+        if dias_restantes >= 366:
+            verde += 1
+        elif 91 <= dias_restantes < 366:
+            amarelo += 1
+        else:
+            vermelho += 1
+
+    return render_template('index.html', produtos=produtos, aviso=aviso,
+                           contagem_verde=verde,
+                           contagem_amarelo=amarelo,
+                           contagem_vermelho=vermelho)
+
+@app.route('/cadastrar', methods=['GET', 'POST'])
+def cadastrar():
     if 'usuario' not in session:
         return redirect(url_for('login'))
 
     if request.method == 'POST':
-        codigo = request.form['codigo']
-        descricao = request.form['descricao']
+        codigo = request.form['codigo'].strip()
+        descricao = request.form['descricao'].strip()
         quantidade = int(request.form['quantidade'])
-        lote = request.form['lote']
+        lote = request.form['lote'].strip()
         vencimento = request.form['vencimento']
+        foto = request.files.get('foto')
 
-        cursor.execute("""
-            INSERT INTO produtos (codigo, descricao, quantidade, lote, vencimento)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (codigo, descricao, quantidade, lote, vencimento))
-        conn.commit()
+        filename = ''
+        if foto and foto.filename:
+            filename = secure_filename(foto.filename)
+            foto.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+
+        query_db('''
+            INSERT INTO produtos (codigo, descricao, quantidade, lote, vencimento, foto)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        ''', (codigo, descricao, quantidade, lote, vencimento, filename), commit=True)
+
         return redirect(url_for('index'))
 
-    return render_template('cadastrar_produto.html')
+    return render_template('cadastrar.html')
 
 @app.route('/editar/<int:id>', methods=['GET', 'POST'])
 def editar(id):
     if 'usuario' not in session:
         return redirect(url_for('login'))
 
-    cursor.execute("SELECT * FROM produtos WHERE id = %s", (id,))
-    produto = cursor.fetchone()
+    produto = query_db('SELECT * FROM produtos WHERE id = %s', (id,), one=True)
+    if not produto:
+        return 'Produto não encontrado', 404
 
     if request.method == 'POST':
-        descricao = request.form['descricao']
+        codigo = request.form['codigo'].strip()
+        descricao = request.form['descricao'].strip()
         quantidade = int(request.form['quantidade'])
-        lote = request.form['lote']
+        lote = request.form['lote'].strip()
         vencimento = request.form['vencimento']
+        foto = request.files.get('foto')
 
-        cursor.execute("""
-            UPDATE produtos SET descricao = %s, quantidade = %s, lote = %s, vencimento = %s WHERE id = %s
-        """, (descricao, quantidade, lote, vencimento, id))
-        conn.commit()
+        filename = produto['foto']
+        if foto and foto.filename:
+            filename = secure_filename(foto.filename)
+            foto.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+
+        query_db('''
+            UPDATE produtos SET codigo=%s, descricao=%s, quantidade=%s, lote=%s,
+            vencimento=%s, foto=%s WHERE id=%s
+        ''', (codigo, descricao, quantidade, lote, vencimento, filename, id), commit=True)
+
         return redirect(url_for('index'))
 
     return render_template('editar.html', produto=produto)
@@ -123,21 +175,16 @@ def excluir(id):
     if 'usuario' not in session:
         return redirect(url_for('login'))
 
-    # abrir conexão e cursor local
-    with psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor) as conn:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM produtos WHERE id = %s", (id,))
-            produto = cursor.fetchone()
+    produto = query_db('SELECT * FROM produtos WHERE id = %s', (id,), one=True)
+    if not produto:
+        return 'Produto não encontrado', 404
 
-            if not produto:
-                return "Produto não encontrado", 404
-
-            if request.method == 'POST':
-                cursor.execute("DELETE FROM produtos WHERE id = %s", (id,))
-                conn.commit()
-                return redirect(url_for('index'))
+    if request.method == 'POST':
+        query_db('DELETE FROM produtos WHERE id = %s', (id,), commit=True)
+        return redirect(url_for('index'))
 
     return render_template('confirmar_exclusao.html', produto=produto)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    init_db()
+    app.run(host='0.0.0.0', port=5000)
