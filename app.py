@@ -1,7 +1,9 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from werkzeug.utils import secure_filename
 import os
-import sqlite3
+import psycopg2
+import psycopg2.extras
+from urllib.parse import urlparse
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
@@ -9,24 +11,26 @@ app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.secret_key = 'sua-chave-secreta-aqui'
 app.permanent_session_lifetime = timedelta(minutes=15)
 
-@app.route("/verificar_senha", methods=["POST"])
-def verificar_senha():
-    data = request.get_json()
-    senha = data.get("senha")
+# URL do banco fornecida pelo Render
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-    # Senha específica para ações (diferente da senha de login)
-    if senha == "operador456":
-        return jsonify({"valido": True})
-    else:
-        return jsonify({"valido": False})
+def get_db_connection():
+    result = urlparse(DATABASE_URL)
+    conn = psycopg2.connect(
+        dbname=result.path[1:],
+        user=result.username,
+        password=result.password,
+        host=result.hostname,
+        port=result.port
+    )
+    return conn
 
-# Criação do banco
 def init_db():
-    conn = sqlite3.connect('validade.db')
-    c = conn.cursor()
-    c.execute('''
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute('''
         CREATE TABLE IF NOT EXISTS produtos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             codigo TEXT,
             descricao TEXT,
             quantidade INTEGER,
@@ -36,72 +40,63 @@ def init_db():
         )
     ''')
     conn.commit()
+    cur.close()
     conn.close()
 
-# Conexão
-def get_db_connection():
-    conn = sqlite3.connect('validade.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+@app.route("/verificar_senha", methods=["POST"])
+def verificar_senha():
+    data = request.get_json()
+    senha = data.get("senha")
+    if senha == "operador456":
+        return jsonify({"valido": True})
+    else:
+        return jsonify({"valido": False})
 
-# Login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         senha = request.form.get('senha')
         if senha == '1234':
             session.clear()
-            session.permanent = False  # a sessão expira ao fechar o navegador
+            session.permanent = False
             session['usuario'] = 'admin'
             return redirect(url_for('index'))
         else:
             return render_template('login.html', erro='Senha incorreta.')
     return render_template('login.html')
 
-# Logout
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# Página inicial com contagem por categoria
 @app.route('/')
 def index():
     if 'usuario' not in session:
         return redirect(url_for('login'))
 
     conn = get_db_connection()
-    produtos_raw = conn.execute('SELECT * FROM produtos').fetchall()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('SELECT * FROM produtos')
+    produtos_raw = cur.fetchall()
+    cur.close()
     conn.close()
 
     hoje = datetime.today().date()
-    produtos = []
-    aviso = []
-
-    contagem_verde = 0
-    contagem_amarelo = 0
-    contagem_vermelho = 0
+    produtos, aviso = [], []
+    contagem_verde = contagem_amarelo = contagem_vermelho = 0
 
     for p in produtos_raw:
-        venc = datetime.strptime(p['vencimento'], '%Y-%m-%d').date()
+        venc = p['vencimento']
         dias_restantes = (venc - hoje).days
 
-        produto = {
-            'id': p['id'],
-            'codigo': p['codigo'],
-            'descricao': p['descricao'],
-            'quantidade': p['quantidade'],
-            'lote': p['lote'],
-            'vencimento': venc,
-            'foto': p['foto'],
-            'dias_restantes': dias_restantes
-        }
+        produto = dict(p)
+        produto['dias_restantes'] = dias_restantes
         produtos.append(produto)
 
         if 0 <= dias_restantes <= 30:
             aviso.append(f"⚠️ Atenção! Produto {p['descricao']} (cód: {p['codigo']}) vence em {dias_restantes} dias!")
 
-        # Contagem das categorias
         if dias_restantes >= 366:
             contagem_verde += 1
         elif 91 <= dias_restantes < 366:
@@ -109,14 +104,11 @@ def index():
         else:
             contagem_vermelho += 1
 
-    return render_template('index.html', 
-                           produtos=produtos, 
-                           aviso=aviso,
+    return render_template('index.html', produtos=produtos, aviso=aviso,
                            contagem_verde=contagem_verde,
                            contagem_amarelo=contagem_amarelo,
                            contagem_vermelho=contagem_vermelho)
 
-# Cadastro
 @app.route('/cadastrar', methods=['GET', 'POST'])
 def cadastrar():
     if 'usuario' not in session:
@@ -128,7 +120,6 @@ def cadastrar():
         quantidade = request.form['quantidade']
         lote = request.form['lote']
         vencimento = request.form['vencimento']
-
         foto = request.files['foto']
         filename = ''
         if foto and foto.filename:
@@ -136,24 +127,27 @@ def cadastrar():
             foto.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
         conn = get_db_connection()
-        conn.execute('''
+        cur = conn.cursor()
+        cur.execute('''
             INSERT INTO produtos (codigo, descricao, quantidade, lote, vencimento, foto)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         ''', (codigo, descricao, quantidade, lote, vencimento, filename))
         conn.commit()
+        cur.close()
         conn.close()
         return redirect(url_for('index'))
 
     return render_template('cadastrar.html')
 
-# Editar produto
 @app.route('/editar/<int:id>', methods=['GET', 'POST'])
 def editar(id):
     if 'usuario' not in session:
         return redirect(url_for('login'))
 
     conn = get_db_connection()
-    produto = conn.execute('SELECT * FROM produtos WHERE id = ?', (id,)).fetchone()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('SELECT * FROM produtos WHERE id = %s', (id,))
+    produto = cur.fetchone()
 
     if not produto:
         return 'Produto não encontrado', 404
@@ -171,39 +165,45 @@ def editar(id):
             filename = secure_filename(foto.filename)
             foto.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
-        conn.execute('''
+        cur.execute('''
             UPDATE produtos
-            SET codigo = ?, descricao = ?, quantidade = ?, lote = ?, vencimento = ?, foto = ?
-            WHERE id = ?
+            SET codigo = %s, descricao = %s, quantidade = %s, lote = %s, vencimento = %s, foto = %s
+            WHERE id = %s
         ''', (codigo, descricao, quantidade, lote, vencimento, filename, id))
         conn.commit()
+        cur.close()
         conn.close()
         return redirect(url_for('index'))
 
+    cur.close()
     conn.close()
     return render_template('editar.html', produto=produto)
 
-# Excluir produto
 @app.route('/excluir/<int:id>', methods=['GET', 'POST'])
 def excluir(id):
     if 'usuario' not in session:
         return redirect(url_for('login'))
 
     conn = get_db_connection()
-    produto = conn.execute('SELECT * FROM produtos WHERE id = ?', (id,)).fetchone()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('SELECT * FROM produtos WHERE id = %s', (id,))
+    produto = cur.fetchone()
 
     if not produto:
         return 'Produto não encontrado', 404
 
     if request.method == 'POST':
-        conn.execute('DELETE FROM produtos WHERE id = ?', (id,))
+        cur.execute('DELETE FROM produtos WHERE id = %s', (id,))
         conn.commit()
+        cur.close()
         conn.close()
         return redirect(url_for('index'))
 
+    cur.close()
     conn.close()
     return render_template('confirmar_exclusao.html', produto=produto)
 
 if __name__ == '__main__':
     init_db()
     app.run(host='0.0.0.0', port=5000, debug=True)
+    
