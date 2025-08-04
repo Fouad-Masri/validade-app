@@ -123,13 +123,19 @@ def excluir(id):
     if 'usuario' not in session:
         return redirect(url_for('login'))
 
-    cursor.execute("SELECT * FROM produtos WHERE id = %s", (id,))
-    produto = cursor.fetchone()
+    # abrir conexão e cursor local
+    with psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM produtos WHERE id = %s", (id,))
+            produto = cursor.fetchone()
 
-    if request.method == 'POST':
-        cursor.execute("DELETE FROM produtos WHERE id = %s", (id,))
-        conn.commit()
-        return redirect(url_for('index'))
+            if not produto:
+                return "Produto não encontrado", 404
+
+            if request.method == 'POST':
+                cursor.execute("DELETE FROM produtos WHERE id = %s", (id,))
+                conn.commit()
+                return redirect(url_for('index'))
 
     return render_template('confirmar_exclusao.html', produto=produto)
 
