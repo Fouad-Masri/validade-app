@@ -3,34 +3,36 @@ from werkzeug.utils import secure_filename
 import os
 import psycopg2
 import psycopg2.extras
-from urllib.parse import urlparse
 from datetime import datetime, timedelta
 
+# === Configuração da aplicação Flask ===
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "chave-padrao")
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
-app.secret_key = 'sua-chave-secreta-aqui'
 app.permanent_session_lifetime = timedelta(minutes=15)
 
-# URL do banco de dados do Render com SSL
+# === URL do banco de dados PostgreSQL (Render) ===
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-def get_db_connection():
-    result = urlparse(DATABASE_URL)
-    return psycopg2.connect(
-        dbname=result.path[1:],
-        user=result.username,
-        password=result.password,
-        host=result.hostname,
-        port=result.port,
-        sslmode='require',
-        cursor_factory=psycopg2.extras.DictCursor
-    )
+if not DATABASE_URL:
+    raise RuntimeError("A variável de ambiente DATABASE_URL não está definida.")
 
-def init_db():
-    conn = get_db_connection()
+# === Função para conectar ao banco ===
+def get_db_connection():
     try:
-        with conn:
-            cur = conn.cursor()
+        return psycopg2.connect(
+            dsn=DATABASE_URL,
+            sslmode='require',
+            cursor_factory=psycopg2.extras.DictCursor
+        )
+    except Exception as e:
+        print("Erro ao conectar ao banco:", e)
+        raise
+
+# === Inicializar banco com a tabela produtos ===
+def init_db():
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS produtos (
                     id SERIAL PRIMARY KEY,
@@ -43,29 +45,26 @@ def init_db():
                 )
             ''')
             conn.commit()
-    finally:
-        conn.close()
 
+# === Função utilitária para executar queries ===
 def query_db(query, args=(), one=False, commit=False):
-    conn = get_db_connection()
-    try:
-        with conn:
-            cur = conn.cursor()
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
             cur.execute(query, args)
             if commit:
                 conn.commit()
-            if query.strip().upper().startswith("SELECT"):
-                results = cur.fetchall()
-                return results[0] if one else results
-    finally:
-        conn.close()
+                return
+            result = cur.fetchall()
+            return result[0] if one else result
 
+# === Rota para verificação de senha (uso via JS) ===
 @app.route("/verificar_senha", methods=["POST"])
 def verificar_senha():
     data = request.get_json()
     senha = data.get("senha")
     return jsonify({"valido": senha == "operador456"})
 
+# === Login ===
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -76,11 +75,13 @@ def login():
         return render_template('login.html', erro="Senha incorreta.")
     return render_template('login.html')
 
+# === Logout ===
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login'))
 
+# === Página principal ===
 @app.route('/')
 def index():
     if 'usuario' not in session:
@@ -94,7 +95,7 @@ def index():
     for p in produtos:
         venc = p['vencimento']
         if isinstance(venc, str):
-         venc = datetime.strptime(venc, '%Y-%m-%d').date()
+            venc = datetime.strptime(venc, '%Y-%m-%d').date()
         dias_restantes = (venc - hoje).days
         p['dias_restantes'] = dias_restantes
         if 0 <= dias_restantes <= 30:
@@ -114,6 +115,7 @@ def index():
                            contagem_amarelo=amarelo,
                            contagem_vermelho=vermelho)
 
+# === Cadastrar produto ===
 @app.route('/cadastrar', methods=['GET', 'POST'])
 def cadastrar():
     if 'usuario' not in session:
@@ -141,6 +143,7 @@ def cadastrar():
 
     return render_template('cadastrar.html')
 
+# === Editar produto ===
 @app.route('/editar/<int:id>', methods=['GET', 'POST'])
 def editar(id):
     if 'usuario' not in session:
@@ -172,6 +175,7 @@ def editar(id):
 
     return render_template('editar.html', produto=produto)
 
+# === Excluir produto ===
 @app.route('/excluir/<int:id>', methods=['GET', 'POST'])
 def excluir(id):
     if 'usuario' not in session:
@@ -187,6 +191,10 @@ def excluir(id):
 
     return render_template('confirmar_exclusao.html', produto=produto)
 
+# === Iniciar aplicação ===
 if __name__ == '__main__':
-    init_db()
-    app.run(host='0.0.0.0', port=5000)
+    try:
+        init_db()
+    except Exception as e:
+        print("Erro ao inicializar o banco:", e)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
