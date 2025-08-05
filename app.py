@@ -11,8 +11,8 @@ app.secret_key = os.environ.get("SECRET_KEY", "chave-padrao")
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.permanent_session_lifetime = timedelta(minutes=15)
 
-# === URL do banco de dados PostgreSQL (Render) ===
-DATABASE_URL = "postgres://validade_user:DEAV3HTY1ss2NI2vdgojU8cur2fnEjxP@dpg-d28hpiqli9vc73am77bg-a.render.com:5432/validade_db"
+# === URL do banco de dados PostgreSQL (externa para acesso local) ===
+DATABASE_URL = "postgresql://validade_user:DEAV3HTY1ss2NI2vdgojU8cur2fnEjxP@dpg-d28hpiqli9vc73am77bg-a.virginia-postgres.render.com:5432/validade_db"
 
 # === Função para conectar ao banco ===
 def get_db_connection():
@@ -194,4 +194,4 @@ if __name__ == '__main__':
         init_db()
     except Exception as e:
         print("Erro ao inicializar o banco:", e)
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
