@@ -84,21 +84,33 @@ def index():
     if 'usuario' not in session:
         return redirect(url_for('login'))
 
-    produtos = query_db("SELECT * FROM produtos ORDER BY vencimento ASC")
+    produtos_raw = query_db("SELECT * FROM produtos ORDER BY vencimento ASC")
+    produtos = []
     hoje = datetime.today().date()
     aviso = []
     verde = amarelo = vermelho = 0
 
-    for p in produtos:
-        venc = p['vencimento']
+    for p in produtos_raw:
+        p_dict = dict(p)  # converte para dict mutável
+        venc = p_dict.get('vencimento')
+
+        # Garante que venc seja um objeto date
         if isinstance(venc, str):
-            venc = datetime.strptime(venc, '%Y-%m-%d').date()
+            try:
+                venc = datetime.strptime(venc, '%Y-%m-%d').date()
+            except Exception:
+                venc = hoje  # fallback para hoje se falhar
+        elif venc is None:
+            venc = hoje
+
         dias_restantes = (venc - hoje).days
-        p['dias_restantes'] = dias_restantes
+        p_dict['dias_restantes'] = dias_restantes
+        produtos.append(p_dict)
+
         if 0 <= dias_restantes <= 30:
-            aviso.append(f"⚠️ {p['descricao']} (cód: {p['codigo']}) vence em {dias_restantes} dias!")
+            aviso.append(f"⚠️ {p_dict['descricao']} (cód: {p_dict['codigo']}) vence em {dias_restantes} dias!")
         elif dias_restantes < 0:
-            aviso.append(f"❌ {p['descricao']} (cód: {p['codigo']}) está vencido!")
+            aviso.append(f"❌ {p_dict['descricao']} (cód: {p_dict['codigo']}) está vencido!")
 
         if dias_restantes >= 366:
             verde += 1
