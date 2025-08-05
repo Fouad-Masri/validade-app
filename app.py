@@ -12,7 +12,7 @@ app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.permanent_session_lifetime = timedelta(minutes=15)
 
 # === URL do banco de dados PostgreSQL (Render) ===
-DATABASE_URL = "postgres://validade_user:DEAV3HTY1ss2NI2vdgojU8cur2fnEjxP@dpg-d28hpiqli9vc73am77bg-a/validade_db"
+DATABASE_URL = "postgres://validade_user:DEAV3HTY1ss2NI2vdgojU8cur2fnEjxP@dpg-d28hpiqli9vc73am77bg-a.render.com:5432/validade_db"
 
 # === Função para conectar ao banco ===
 def get_db_connection():
