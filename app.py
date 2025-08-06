@@ -1,42 +1,42 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from werkzeug.utils import secure_filename
 import os
 import psycopg2
 import psycopg2.extras
-from datetime import datetime
-import cloudinary
-import cloudinary.uploader
+import sqlite3
+from urllib.parse import urlparse
+from datetime import datetime, timedelta
 
-# === Configuração da aplicação Flask ===
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "chave-padrao")
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.secret_key = 'SECRET_KEY", "chave-padrao'  # Troque para uma chave secreta forte em produção
+app.permanent_session_lifetime = timedelta(minutes=15)
 
-# === Configuração do Cloudinary ===
-cloudinary.config(
-    cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME'),
-    api_key=os.environ.get('CLOUDINARY_API_KEY'),
-    api_secret=os.environ.get('CLOUDINARY_API_SECRET')
-)
-
-# === Banco de dados PostgreSQL ===
-DATABASE_URL = os.environ.get("DATABASE_URL")
-if not DATABASE_URL:
-    raise RuntimeError("A variável de ambiente DATABASE_URL não está definida.")
+DATABASE_URL = os.environ.get("postgresql://validade_user:DEAV3HTY1ss2NI2vdgojU8cur2fEnEjxP@dpg-d28hpiqli9vc73am7lfg-a.oregon-postgres.render.com:5432/validade_db")
 
 def get_db_connection():
-    try:
-        return psycopg2.connect(
-            dsn=DATABASE_URL,
-            sslmode='require',
-            cursor_factory=psycopg2.extras.DictCursor
+    if DATABASE_URL:
+        # PostgreSQL
+        result = urlparse(DATABASE_URL)
+        conn = psycopg2.connect(
+            dbname=result.path[1:],  # remove a barra inicial "/"
+            user=result.username,
+            password=result.password,
+            host=result.hostname,
+            port=result.port
         )
-    except Exception as e:
-        print("Erro ao conectar ao banco:", e)
-        raise
+        return conn
+    else:
+        # SQLite
+        conn = sqlite3.connect('validade.db')
+        conn.row_factory = sqlite3.Row
+        return conn
 
 def init_db():
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
+    conn = get_db_connection()
+    with conn:
+        cur = conn.cursor()
+        if DATABASE_URL:
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS produtos (
                     id SERIAL PRIMARY KEY,
@@ -48,34 +48,72 @@ def init_db():
                     foto TEXT
                 )
             ''')
-            conn.commit()
+        else:
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS produtos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    codigo TEXT NOT NULL,
+                    descricao TEXT NOT NULL,
+                    quantidade INTEGER NOT NULL,
+                    lote TEXT,
+                    vencimento TEXT NOT NULL,
+                    foto TEXT
+                )
+            ''')
+        cur.close()
+    conn.close()
 
 def query_db(query, args=(), one=False, commit=False):
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, args)
-            if commit:
-                conn.commit()
-                return
-            result = cur.fetchall()
-            return result[0] if one else result
-
-# === Rotas ===
+    conn = get_db_connection()
+    try:
+        with conn:
+            if DATABASE_URL:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    # Ajustar placeholders para PostgreSQL (%s)
+                    cur.execute(query, args)
+                    if commit:
+                        conn.commit()
+                    if query.strip().upper().startswith("SELECT"):
+                        result = cur.fetchall()
+                        return (result[0] if result else None) if one else result
+            else:
+                # SQLite usa ?
+                query_sqlite = query.replace('%s', '?')
+                cur = conn.cursor()
+                cur.execute(query_sqlite, args)
+                if commit:
+                    conn.commit()
+                if query_sqlite.strip().upper().startswith("SELECT"):
+                    rows = cur.fetchall()
+                    # Converte sqlite3.Row para dict para facilitar template
+                    rows_dict = [dict(row) for row in rows]
+                    cur.close()
+                    return (rows_dict[0] if rows_dict else None) if one else rows_dict
+                cur.close()
+                return None
+    finally:
+        conn.close()
 
 @app.route("/verificar_senha", methods=["POST"])
 def verificar_senha():
     data = request.get_json()
     senha = data.get("senha")
-    return jsonify({"valido": senha == "operador456"})
+    if senha == "operador456":
+        return jsonify({"valido": True})
+    else:
+        return jsonify({"valido": False})
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         senha = request.form.get('senha')
-        if senha == 'admin123':
+        if senha == '1234':
+            session.clear()
+            session.permanent = False
             session['usuario'] = 'admin'
             return redirect(url_for('index'))
-        return render_template('login.html', erro="Senha incorreta.")
+        else:
+            return render_template('login.html', erro='Senha incorreta.')
     return render_template('login.html')
 
 @app.route('/logout')
@@ -88,43 +126,45 @@ def index():
     if 'usuario' not in session:
         return redirect(url_for('login'))
 
-    produtos_raw = query_db("SELECT * FROM produtos ORDER BY vencimento ASC")
-    produtos = []
+    produtos_raw = query_db('SELECT * FROM produtos ORDER BY vencimento ASC')
+
     hoje = datetime.today().date()
+    produtos = []
     aviso = []
-    verde = amarelo = vermelho = 0
+    contagem_verde = contagem_amarelo = contagem_vermelho = 0
 
     for p in produtos_raw:
-        p_dict = dict(p)
-        venc = p_dict.get('vencimento')
-        if isinstance(venc, str):
-            try:
-                venc = datetime.strptime(venc, '%Y-%m-%d').date()
-            except:
-                venc = hoje
-        elif venc is None:
-            venc = hoje
+        venc = p['vencimento']
+        # Se local SQLite, converte string para date
+        if not DATABASE_URL:
+            venc = datetime.strptime(venc, '%Y-%m-%d').date()
+        else:
+            # No PostgreSQL, já é date
+            venc = venc
 
         dias_restantes = (venc - hoje).days
-        p_dict['dias_restantes'] = dias_restantes
-        produtos.append(p_dict)
+
+        produto = dict(p)
+        produto['vencimento'] = venc
+        produto['dias_restantes'] = dias_restantes
+        produtos.append(produto)
 
         if 0 <= dias_restantes <= 30:
-            aviso.append(f"⚠️ {p_dict['descricao']} (cód: {p_dict['codigo']}) vence em {dias_restantes} dias!")
+            aviso.append(f"⚠️ Atenção! Produto {p['descricao']} (cód: {p['codigo']}) vence em {dias_restantes} dias!")
         elif dias_restantes < 0:
-            aviso.append(f"❌ {p_dict['descricao']} (cód: {p_dict['codigo']}) está vencido!")
+            aviso.append(f"❌ Produto {p['descricao']} (cód: {p['codigo']}) está vencido!")
 
         if dias_restantes >= 366:
-            verde += 1
+            contagem_verde += 1
         elif 91 <= dias_restantes < 366:
-            amarelo += 1
+            contagem_amarelo += 1
         else:
-            vermelho += 1
+            contagem_vermelho += 1
 
     return render_template('index.html', produtos=produtos, aviso=aviso,
-                           contagem_verde=verde,
-                           contagem_amarelo=amarelo,
-                           contagem_vermelho=vermelho)
+                           contagem_verde=contagem_verde,
+                           contagem_amarelo=contagem_amarelo,
+                           contagem_vermelho=contagem_vermelho)
 
 @app.route('/cadastrar', methods=['GET', 'POST'])
 def cadastrar():
@@ -132,25 +172,28 @@ def cadastrar():
         return redirect(url_for('login'))
 
     if request.method == 'POST':
-        codigo = request.form['codigo'].strip()
-        descricao = request.form['descricao'].strip()
-        quantidade = int(request.form['quantidade'])
-        lote = request.form['lote'].strip()
-        vencimento = request.form['vencimento']
+        codigo = request.form.get('codigo', '').strip()
+        descricao = request.form.get('descricao', '').strip()
+        quantidade = request.form.get('quantidade', '0')
+        lote = request.form.get('lote', '').strip()
+        vencimento = request.form.get('vencimento')
         foto = request.files.get('foto')
 
-        foto_url = ''
-        try:
-            if foto and foto.filename:
-                upload_result = cloudinary.uploader.upload(foto)
-                foto_url = upload_result.get("secure_url", "")
-        except Exception as e:
-            print("Erro no upload da foto:", e)
+        if not codigo or not descricao or not vencimento:
+            return redirect(url_for('cadastrar'))
+
+        filename = ''
+        if foto and foto.filename != '':
+            filename = secure_filename(foto.filename)
+            foto.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
         query_db('''
             INSERT INTO produtos (codigo, descricao, quantidade, lote, vencimento, foto)
             VALUES (%s, %s, %s, %s, %s, %s)
-        ''', (codigo, descricao, quantidade, lote, vencimento, foto_url), commit=True)
+        ''' if DATABASE_URL else '''
+            INSERT INTO produtos (codigo, descricao, quantidade, lote, vencimento, foto)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (codigo, descricao, int(quantidade), lote, vencimento, filename), commit=True)
 
         return redirect(url_for('index'))
 
@@ -161,34 +204,31 @@ def editar(id):
     if 'usuario' not in session:
         return redirect(url_for('login'))
 
-    produto = query_db('SELECT * FROM produtos WHERE id = %s', (id,), one=True)
+    produto = query_db('SELECT * FROM produtos WHERE id = %s' if DATABASE_URL else 'SELECT * FROM produtos WHERE id = ?', (id,), one=True)
+
     if not produto:
-        abort(404, description="Produto não encontrado")
+        return 'Produto não encontrado', 404
 
     if request.method == 'POST':
-        try:
-            codigo = request.form['codigo'].strip()
-            descricao = request.form['descricao'].strip()
-            quantidade = int(request.form['quantidade'])
-            lote = request.form['lote'].strip()
-            vencimento = request.form['vencimento']
-            foto = request.files.get('foto')
+        codigo = request.form.get('codigo', '').strip()
+        descricao = request.form.get('descricao', '').strip()
+        quantidade = request.form.get('quantidade', '0')
+        lote = request.form.get('lote', '').strip()
+        vencimento = request.form.get('vencimento')
+        foto = request.files.get('foto')
 
-            foto_url = produto['foto']
-            if foto and foto.filename:
-                upload_result = cloudinary.uploader.upload(foto)
-                foto_url = upload_result.get("secure_url", foto_url)
+        filename = produto['foto']
+        if foto and foto.filename != '':
+            filename = secure_filename(foto.filename)
+            foto.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
 
-            query_db('''
-                UPDATE produtos SET codigo=%s, descricao=%s, quantidade=%s, lote=%s,
-                vencimento=%s, foto=%s WHERE id=%s
-            ''', (codigo, descricao, quantidade, lote, vencimento, foto_url, id), commit=True)
+        query_db('''
+            UPDATE produtos SET codigo=%s, descricao=%s, quantidade=%s, lote=%s, vencimento=%s, foto=%s WHERE id=%s
+        ''' if DATABASE_URL else '''
+            UPDATE produtos SET codigo=?, descricao=?, quantidade=?, lote=?, vencimento=?, foto=? WHERE id=?
+        ''', (codigo, descricao, int(quantidade), lote, vencimento, filename, id), commit=True)
 
-            return redirect(url_for('index'))
-
-        except Exception as e:
-            print(f"Erro ao editar produto ID {id}: {e}")
-            return render_template('editar.html', produto=produto, erro="Erro ao salvar alterações.")
+        return redirect(url_for('index'))
 
     return render_template('editar.html', produto=produto)
 
@@ -197,19 +237,18 @@ def excluir(id):
     if 'usuario' not in session:
         return redirect(url_for('login'))
 
-    produto = query_db('SELECT * FROM produtos WHERE id = %s', (id,), one=True)
+    produto = query_db('SELECT * FROM produtos WHERE id = %s' if DATABASE_URL else 'SELECT * FROM produtos WHERE id = ?', (id,), one=True)
+
     if not produto:
-        abort(404, description="Produto não encontrado")
+        return 'Produto não encontrado', 404
 
     if request.method == 'POST':
-        query_db('DELETE FROM produtos WHERE id = %s', (id,), commit=True)
+        query_db('DELETE FROM produtos WHERE id = %s' if DATABASE_URL else 'DELETE FROM produtos WHERE id = ?', (id,), commit=True)
         return redirect(url_for('index'))
 
     return render_template('confirmar_exclusao.html', produto=produto)
 
+
 if __name__ == '__main__':
-    try:
-        init_db()
-    except Exception as e:
-        print("Erro ao inicializar o banco:", e)
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+    init_db()
+    app.run(host='0.0.0.0', port=5000, debug=True)
