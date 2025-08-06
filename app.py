@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, abort
 from werkzeug.utils import secure_filename
 import os
 import psycopg2
@@ -10,17 +10,16 @@ import cloudinary.uploader
 # === Configuração da aplicação Flask ===
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "chave-padrao")
-app.config['UPLOAD_FOLDER'] = 'static/uploads'  # não será mais usada
-# Removido tempo de expiração da sessão
+# Não usamos mais UPLOAD_FOLDER local, upload direto no Cloudinary
 
 # === Configuração do Cloudinary ===
 cloudinary.config(
     cloud_name='dzignegux',
     api_key='197537514221134',
-    api_secret='**********'
+    api_secret='**********'  # ocultado, usar variável ambiente
 )
 
-# === URL do banco de dados PostgreSQL (externa para acesso local) ===
+# === URL do banco de dados PostgreSQL ===
 DATABASE_URL = "postgresql://validade_user:DEAV3HTY1ss2NI2vdgojU8cur2fnEjxP@dpg-d28hpiqli9vc73am77bg-a.virginia-postgres.render.com:5432/validade_db"
 
 def get_db_connection():
@@ -138,9 +137,13 @@ def cadastrar():
         foto = request.files.get('foto')
 
         foto_url = ''
-        if foto and foto.filename:
-            upload_result = cloudinary.uploader.upload(foto)
-            foto_url = upload_result.get("secure_url", "")
+        try:
+            if foto and foto.filename:
+                upload_result = cloudinary.uploader.upload(foto)
+                foto_url = upload_result.get("secure_url", "")
+        except Exception as e:
+            print("Erro no upload da foto:", e)
+            foto_url = ''
 
         query_db('''
             INSERT INTO produtos (codigo, descricao, quantidade, lote, vencimento, foto)
@@ -158,27 +161,32 @@ def editar(id):
 
     produto = query_db('SELECT * FROM produtos WHERE id = %s', (id,), one=True)
     if not produto:
-        return 'Produto não encontrado', 404
+        abort(404, description="Produto não encontrado")
 
     if request.method == 'POST':
-        codigo = request.form['codigo'].strip()
-        descricao = request.form['descricao'].strip()
-        quantidade = int(request.form['quantidade'])
-        lote = request.form['lote'].strip()
-        vencimento = request.form['vencimento']
-        foto = request.files.get('foto')
+        try:
+            codigo = request.form['codigo'].strip()
+            descricao = request.form['descricao'].strip()
+            quantidade = int(request.form['quantidade'])
+            lote = request.form['lote'].strip()
+            vencimento = request.form['vencimento']
+            foto = request.files.get('foto')
 
-        foto_url = produto['foto']
-        if foto and foto.filename:
-            upload_result = cloudinary.uploader.upload(foto)
-            foto_url = upload_result.get("secure_url", foto_url)
+            foto_url = produto['foto']  # mantém a foto atual, se não trocar
+            if foto and foto.filename:
+                upload_result = cloudinary.uploader.upload(foto)
+                foto_url = upload_result.get("secure_url", foto_url)
 
-        query_db('''
-            UPDATE produtos SET codigo=%s, descricao=%s, quantidade=%s, lote=%s,
-            vencimento=%s, foto=%s WHERE id=%s
-        ''', (codigo, descricao, quantidade, lote, vencimento, foto_url, id), commit=True)
+            query_db('''
+                UPDATE produtos SET codigo=%s, descricao=%s, quantidade=%s, lote=%s,
+                vencimento=%s, foto=%s WHERE id=%s
+            ''', (codigo, descricao, quantidade, lote, vencimento, foto_url, id), commit=True)
 
-        return redirect(url_for('index'))
+            return redirect(url_for('index'))
+
+        except Exception as e:
+            print(f"Erro ao editar produto ID {id}: {e}")
+            return render_template('editar.html', produto=produto, erro="Erro ao salvar alterações.")
 
     return render_template('editar.html', produto=produto)
 
@@ -189,13 +197,14 @@ def excluir(id):
 
     produto = query_db('SELECT * FROM produtos WHERE id = %s', (id,), one=True)
     if not produto:
-        return 'Produto não encontrado', 404
+        abort(404, description="Produto não encontrado")
 
     if request.method == 'POST':
         query_db('DELETE FROM produtos WHERE id = %s', (id,), commit=True)
         return redirect(url_for('index'))
 
     return render_template('confirmar_exclusao.html', produto=produto)
+
 
 if __name__ == '__main__':
     try:
