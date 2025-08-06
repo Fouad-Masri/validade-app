@@ -19,7 +19,7 @@ cloudinary.config(
 )
 
 # === URL do banco de dados PostgreSQL ===
-DATABASE_URL = os.environ.get("postgresql://validade_user:DEAV3HTY1ss2NI2vdgojU8cur2fnEjxP@dpg-d28hpiqli9vc73am77bg-a.virginia-postgres.render.com:5432/validade_db")
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db_connection():
     try:
