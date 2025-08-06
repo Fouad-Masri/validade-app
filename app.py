@@ -10,17 +10,16 @@ import cloudinary.uploader
 # === Configuração da aplicação Flask ===
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "chave-padrao")
-# Não usamos mais UPLOAD_FOLDER local, upload direto no Cloudinary
 
-# === Configuração do Cloudinary ===
+# === Configuração do Cloudinary usando variáveis de ambiente corretamente ===
 cloudinary.config(
-    cloud_name='dzignegux',
-    api_key='197537514221134',
-    api_secret='**********'  # ocultado, usar variável ambiente
+    cloud_name=os.environ.get('dzignegux'),
+    api_key=os.environ.get('197537514221134'),
+    api_secret=os.environ.get('**********')
 )
 
 # === URL do banco de dados PostgreSQL ===
-DATABASE_URL = "postgresql://validade_user:DEAV3HTY1ss2NI2vdgojU8cur2fnEjxP@dpg-d28hpiqli9vc73am77bg-a.virginia-postgres.render.com:5432/validade_db"
+DATABASE_URL = os.environ.get("postgresql://validade_user:DEAV3HTY1ss2NI2vdgojU8cur2fnEjxP@dpg-d28hpiqli9vc73am77bg-a.virginia-postgres.render.com:5432/validade_db")
 
 def get_db_connection():
     try:
@@ -143,7 +142,6 @@ def cadastrar():
                 foto_url = upload_result.get("secure_url", "")
         except Exception as e:
             print("Erro no upload da foto:", e)
-            foto_url = ''
 
         query_db('''
             INSERT INTO produtos (codigo, descricao, quantidade, lote, vencimento, foto)
@@ -172,7 +170,7 @@ def editar(id):
             vencimento = request.form['vencimento']
             foto = request.files.get('foto')
 
-            foto_url = produto['foto']  # mantém a foto atual, se não trocar
+            foto_url = produto['foto']
             if foto and foto.filename:
                 upload_result = cloudinary.uploader.upload(foto)
                 foto_url = upload_result.get("secure_url", foto_url)
