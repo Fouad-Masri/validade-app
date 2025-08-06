@@ -13,9 +13,9 @@ app.secret_key = os.environ.get("SECRET_KEY", "chave-padrao")
 
 # === Configuração do Cloudinary usando variáveis de ambiente corretamente ===
 cloudinary.config(
-    cloud_name=os.environ.get('dzignegux'),
-    api_key=os.environ.get('197537514221134'),
-    api_secret=os.environ.get('**********')
+    cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME'),
+    api_key=os.environ.get('CLOUDINARY_API_KEY'),
+    api_secret=os.environ.get('CLOUDINARY_API_SECRET')
 )
 
 # === URL do banco de dados PostgreSQL ===
