@@ -113,7 +113,9 @@
         tr:hover { background-color: #f1f1f1; }
 
         img {
-            max-width: 70px;
+            width: 70px;
+            height: 70px;
+            object-fit: cover;
             border-radius: 5px;
         }
 
@@ -291,7 +293,7 @@
             <tr class="{{ classe }}" data-codigo="{{ p.codigo }}" data-descricao="{{ p.descricao }}" data-dias="{{ p.dias_restantes }}">
                 <td>
                     {% if p.foto %}
-                        <img src="{{ url_for('static', filename='uploads/' + p.foto) }}" alt="Foto">
+                        <img src="{{ p.foto }}" alt="Foto">
                     {% else %}
                         Sem foto
                     {% endif %}

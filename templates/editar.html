@@ -121,7 +121,7 @@
 
             <label>Foto atual:</label>
             {% if produto['foto'] %}
-                <img src="{{ url_for('static', filename='uploads/' ~ produto['foto']) }}" alt="Foto do produto" class="foto-preview">
+                <img src="{{ produto['foto'] }}" alt="Foto do produto" class="foto-preview">
             {% else %}
                 <p>Sem foto</p>
             {% endif %}

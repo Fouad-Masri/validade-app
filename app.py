@@ -3,18 +3,26 @@ from werkzeug.utils import secure_filename
 import os
 import psycopg2
 import psycopg2.extras
-from datetime import datetime, timedelta
+from datetime import datetime
+import cloudinary
+import cloudinary.uploader
 
 # === Configuração da aplicação Flask ===
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "chave-padrao")
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
-app.permanent_session_lifetime = timedelta(minutes=15)
+app.config['UPLOAD_FOLDER'] = 'static/uploads'  # não será mais usada
+# Removido tempo de expiração da sessão
+
+# === Configuração do Cloudinary ===
+cloudinary.config(
+    cloud_name='dzignegux',
+    api_key='197537514221134',
+    api_secret='**********'
+)
 
 # === URL do banco de dados PostgreSQL (externa para acesso local) ===
 DATABASE_URL = "postgresql://validade_user:DEAV3HTY1ss2NI2vdgojU8cur2fnEjxP@dpg-d28hpiqli9vc73am77bg-a.virginia-postgres.render.com:5432/validade_db"
 
-# === Função para conectar ao banco ===
 def get_db_connection():
     try:
         return psycopg2.connect(
@@ -26,7 +34,6 @@ def get_db_connection():
         print("Erro ao conectar ao banco:", e)
         raise
 
-# === Inicializar banco com a tabela produtos ===
 def init_db():
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -43,7 +50,6 @@ def init_db():
             ''')
             conn.commit()
 
-# === Função utilitária para executar queries ===
 def query_db(query, args=(), one=False, commit=False):
     with get_db_connection() as conn:
         with conn.cursor() as cur:
@@ -54,14 +60,12 @@ def query_db(query, args=(), one=False, commit=False):
             result = cur.fetchall()
             return result[0] if one else result
 
-# === Rota para verificação de senha (uso via JS) ===
 @app.route("/verificar_senha", methods=["POST"])
 def verificar_senha():
     data = request.get_json()
     senha = data.get("senha")
     return jsonify({"valido": senha == "operador456"})
 
-# === Login ===
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -72,13 +76,11 @@ def login():
         return render_template('login.html', erro="Senha incorreta.")
     return render_template('login.html')
 
-# === Logout ===
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# === Página principal ===
 @app.route('/')
 def index():
     if 'usuario' not in session:
@@ -91,15 +93,13 @@ def index():
     verde = amarelo = vermelho = 0
 
     for p in produtos_raw:
-        p_dict = dict(p)  # converte para dict mutável
+        p_dict = dict(p)
         venc = p_dict.get('vencimento')
-
-        # Garante que venc seja um objeto date
         if isinstance(venc, str):
             try:
                 venc = datetime.strptime(venc, '%Y-%m-%d').date()
-            except Exception:
-                venc = hoje  # fallback para hoje se falhar
+            except:
+                venc = hoje
         elif venc is None:
             venc = hoje
 
@@ -124,7 +124,6 @@ def index():
                            contagem_amarelo=amarelo,
                            contagem_vermelho=vermelho)
 
-# === Cadastrar produto ===
 @app.route('/cadastrar', methods=['GET', 'POST'])
 def cadastrar():
     if 'usuario' not in session:
@@ -138,21 +137,20 @@ def cadastrar():
         vencimento = request.form['vencimento']
         foto = request.files.get('foto')
 
-        filename = ''
+        foto_url = ''
         if foto and foto.filename:
-            filename = secure_filename(foto.filename)
-            foto.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            upload_result = cloudinary.uploader.upload(foto)
+            foto_url = upload_result.get("secure_url", "")
 
         query_db('''
             INSERT INTO produtos (codigo, descricao, quantidade, lote, vencimento, foto)
             VALUES (%s, %s, %s, %s, %s, %s)
-        ''', (codigo, descricao, quantidade, lote, vencimento, filename), commit=True)
+        ''', (codigo, descricao, quantidade, lote, vencimento, foto_url), commit=True)
 
         return redirect(url_for('index'))
 
     return render_template('cadastrar.html')
 
-# === Editar produto ===
 @app.route('/editar/<int:id>', methods=['GET', 'POST'])
 def editar(id):
     if 'usuario' not in session:
@@ -170,21 +168,20 @@ def editar(id):
         vencimento = request.form['vencimento']
         foto = request.files.get('foto')
 
-        filename = produto['foto']
+        foto_url = produto['foto']
         if foto and foto.filename:
-            filename = secure_filename(foto.filename)
-            foto.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            upload_result = cloudinary.uploader.upload(foto)
+            foto_url = upload_result.get("secure_url", foto_url)
 
         query_db('''
             UPDATE produtos SET codigo=%s, descricao=%s, quantidade=%s, lote=%s,
             vencimento=%s, foto=%s WHERE id=%s
-        ''', (codigo, descricao, quantidade, lote, vencimento, filename, id), commit=True)
+        ''', (codigo, descricao, quantidade, lote, vencimento, foto_url, id), commit=True)
 
         return redirect(url_for('index'))
 
     return render_template('editar.html', produto=produto)
 
-# === Excluir produto ===
 @app.route('/excluir/<int:id>', methods=['GET', 'POST'])
 def excluir(id):
     if 'usuario' not in session:
@@ -200,7 +197,6 @@ def excluir(id):
 
     return render_template('confirmar_exclusao.html', produto=produto)
 
-# === Iniciar aplicação ===
 if __name__ == '__main__':
     try:
         init_db()
