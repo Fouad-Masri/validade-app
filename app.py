@@ -11,15 +11,17 @@ import cloudinary.uploader
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "chave-padrao")
 
-# === Configuração do Cloudinary usando variáveis de ambiente corretamente ===
+# === Configuração do Cloudinary ===
 cloudinary.config(
     cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME'),
     api_key=os.environ.get('CLOUDINARY_API_KEY'),
     api_secret=os.environ.get('CLOUDINARY_API_SECRET')
 )
 
-# === URL do banco de dados PostgreSQL ===
+# === Banco de dados PostgreSQL ===
 DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("A variável de ambiente DATABASE_URL não está definida.")
 
 def get_db_connection():
     try:
@@ -58,6 +60,8 @@ def query_db(query, args=(), one=False, commit=False):
             result = cur.fetchall()
             return result[0] if one else result
 
+# === Rotas ===
+
 @app.route("/verificar_senha", methods=["POST"])
 def verificar_senha():
     data = request.get_json()
@@ -68,7 +72,7 @@ def verificar_senha():
 def login():
     if request.method == 'POST':
         senha = request.form.get('senha')
-        if senha == '1234':
+        if senha == 'admin123':
             session['usuario'] = 'admin'
             return redirect(url_for('index'))
         return render_template('login.html', erro="Senha incorreta.")
@@ -202,7 +206,6 @@ def excluir(id):
         return redirect(url_for('index'))
 
     return render_template('confirmar_exclusao.html', produto=produto)
-
 
 if __name__ == '__main__':
     try:
