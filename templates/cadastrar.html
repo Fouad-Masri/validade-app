@@ -2,6 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cadastrar Produto</title>
     <style>
         body {
@@ -13,7 +14,7 @@
 
         .container {
             max-width: 500px;
-            margin: 50px auto;
+            margin: 40px auto;
             background: white;
             padding: 30px;
             border-radius: 10px;
@@ -26,10 +27,12 @@
             justify-content: center;
             gap: 15px;
             margin-bottom: 25px;
+            flex-wrap: wrap;
+            text-align: center;
         }
 
         .header img {
-            max-width: 150px;
+            max-width: 100px;
             height: auto;
         }
 
@@ -41,7 +44,7 @@
 
         label {
             font-weight: bold;
-            margin-top: 10px;
+            margin-top: 12px;
             display: block;
             color: #333;
         }
@@ -51,7 +54,7 @@
         input[type="date"],
         input[type="file"] {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             margin-top: 5px;
             margin-bottom: 15px;
             border: 1px solid #ccc;
@@ -60,11 +63,15 @@
             background-color: #f9f9f9;
         }
 
+        input[type="file"] {
+            background-color: white;
+        }
+
         input[type="submit"] {
             background-color: #28a745;
             color: white;
             border: none;
-            padding: 12px 20px;
+            padding: 14px 20px;
             font-size: 16px;
             border-radius: 8px;
             cursor: pointer;
@@ -88,40 +95,55 @@
         .back-link:hover {
             text-decoration: underline;
         }
+
+        @media (max-width: 600px) {
+            .container {
+                margin: 20px;
+                padding: 20px;
+            }
+
+            .header img {
+                max-width: 80px;
+            }
+
+            .header h2 {
+                font-size: 20px;
+            }
+        }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <div class="header">
-            <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo Mercadinho Piratininga">
-            <h2>Cadastrar Produto</h2>
-        </div>
+<main class="container">
+    <section class="header">
+        <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo Mercadinho Piratininga">
+        <h2>Cadastrar Produto</h2>
+    </section>
 
-        <form method="POST" enctype="multipart/form-data">
-            <label for="codigo">Código:</label>
-            <input type="text" name="codigo" id="codigo" required>
+    <form method="POST" enctype="multipart/form-data" autocomplete="off">
+        <label for="codigo">Código:</label>
+        <input type="text" name="codigo" id="codigo" required>
 
-            <label for="descricao">Descrição:</label>
-            <input type="text" name="descricao" id="descricao" required>
+        <label for="descricao">Descrição:</label>
+        <input type="text" name="descricao" id="descricao" required>
 
-            <label for="quantidade">Quantidade:</label>
-            <input type="number" name="quantidade" id="quantidade" required>
+        <label for="quantidade">Quantidade:</label>
+        <input type="number" name="quantidade" id="quantidade" required min="0">
 
-            <label for="lote">Lote:</label>
-            <input type="text" name="lote" id="lote">
+        <label for="lote">Lote:</label>
+        <input type="text" name="lote" id="lote">
 
-            <label for="vencimento">Data de vencimento:</label>
-            <input type="date" name="vencimento" id="vencimento" required>
+        <label for="vencimento">Data de vencimento:</label>
+        <input type="date" name="vencimento" id="vencimento" required>
 
-            <label for="foto">Foto:</label>
-            <input type="file" name="foto" id="foto">
+        <label for="foto">Foto (opcional):</label>
+        <input type="file" name="foto" id="foto" accept="image/*">
 
-            <input type="submit" value="Salvar">
-        </form>
+        <input type="submit" value="Salvar">
+    </form>
 
-        <a href="{{ url_for('index') }}" class="back-link">← Voltar para a lista</a>
-    </div>
+    <a href="{{ url_for('index') }}" class="back-link">← Voltar para a lista</a>
+</main>
 
 </body>
 </html>

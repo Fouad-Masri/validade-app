@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -31,58 +32,53 @@
         }
 
         .header-flex h1 {
-            font-size: 2em;
+            font-size: 1.8em;
+            text-align: center;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 100%;
             margin: auto;
-            padding: 20px;
+            padding: 10px;
         }
 
         .btn {
             background-color: #28a745;
             color: white;
-            padding: 10px 18px;
+            padding: 10px 14px;
             border-radius: 6px;
             text-decoration: none;
             margin: 5px 5px 15px 0;
             display: inline-block;
+            font-size: 0.95em;
         }
 
         .btn:hover { background-color: #218838; }
-
         .btn-edit { background-color: #ffc107; color: black; }
         .btn-delete { background-color: #dc3545; color: white; }
         .btn-logout { background-color: #6c757d; }
 
-        .aviso {
-            background-color: #ffe600;
-            color: black;
-            padding: 15px;
-            margin-bottom: 15px;
-            text-align: center;
+        .marquee-alerta {
+            background-color: #ff4c4c;
+            color: white;
+            padding: 10px;
             font-weight: bold;
-            border-radius: 6px;
-            animation: pisca 1s infinite;
-        }
-
-        @keyframes pisca {
-            0%, 100% { background-color: #ffe600; }
-            50% { background-color: #ff4c4c; color: white; }
+            border-radius: 5px;
+            margin-bottom: 10px;
         }
 
         .contador {
             display: flex;
             justify-content: center;
-            gap: 25px;
+            gap: 10px;
+            flex-wrap: wrap;
             margin-bottom: 20px;
             font-weight: bold;
-            font-size: 1.1em;
+            font-size: 0.9em;
         }
 
         .contador div {
-            padding: 10px 20px;
+            padding: 10px 14px;
             border-radius: 8px;
             color: white;
         }
@@ -96,11 +92,12 @@
             border-collapse: collapse;
             background-color: white;
             border-radius: 10px;
-            overflow: hidden;
+            overflow-x: auto;
+            font-size: 0.9em;
         }
 
         th, td {
-            padding: 12px;
+            padding: 8px;
             text-align: center;
         }
 
@@ -113,8 +110,8 @@
         tr:hover { background-color: #f1f1f1; }
 
         img {
-            width: 70px;
-            height: 70px;
+            width: 60px;
+            height: 60px;
             object-fit: cover;
             border-radius: 5px;
         }
@@ -126,40 +123,70 @@
         .filtros {
             margin: 15px 0;
             display: flex;
-            gap: 15px;
+            gap: 10px;
             flex-wrap: wrap;
         }
 
         .filtros input, .filtros select {
-            padding: 8px;
+            padding: 6px;
             border: 1px solid #ccc;
             border-radius: 6px;
+            font-size: 0.9em;
         }
 
-        #print-header {
-            display: none;
-            text-align: center;
-            margin-bottom: 20px;
+        .acoes a {
+            margin: 0 5px;
         }
 
-        #print-header img {
-            max-width: 150px;
-            margin-bottom: 10px;
+        @media (max-width: 600px) {
+            th, td {
+                font-size: 0.8em;
+                padding: 6px;
+            }
+            .btn { font-size: 0.8em; padding: 8px 12px; }
+            img { width: 45px; height: 45px; }
         }
 
-        #print-header h2 {
-            margin: 0;
-            font-size: 1.5em;
-        }
-
+        /* IMPRESSÃO */
         @media print {
-            .btn, .filtros, .aviso, .contador, header, td a {
+            body * {
+                visibility: hidden;
+            }
+
+            .print-area, .print-area * {
+                visibility: visible;
+            }
+
+            .print-area {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                padding: 0;
+            }
+
+            .btn, .filtros, .contador, .marquee-alerta, header, .acoes {
                 display: none !important;
             }
 
-            #print-header {
-                display: block;
+            table {
+                border: 1px solid black;
+                font-size: 12px;
             }
+
+            th, td {
+                border: 1px solid black;
+                padding: 6px;
+                color: black;
+            }
+
+            th {
+                background-color: #ccc !important;
+            }
+
+            tr.vermelho td { background-color: #ffd6d6 !important; }
+            tr.amarelo td { background-color: #fff9cc !important; }
+            tr.verde td { background-color: #e2f7e2 !important; }
         }
     </style>
 
@@ -226,26 +253,21 @@
     </script>
 </head>
 <body>
-
 <header>
     <div class="header-flex">
-        <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo Mercadinho Piratininga">
+        <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo">
         <h1>Controle de Validade</h1>
     </div>
 </header>
 
 <div class="container">
-
-    <div id="print-header">
-        <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Logo Mercadinho Piratininga">
-        <h2>Mercadinho Piratininga - Controle de Validade</h2>
-    </div>
-
     {% if aviso %}
-    <div class="aviso">
-        {% for msg in aviso %}
-            <div>{{ msg }}</div>
-        {% endfor %}
+    <div class="marquee-alerta">
+        <marquee behavior="scroll" direction="left">
+            {% for msg in aviso %}
+                ⚠️ {{ msg }} &nbsp;&nbsp;&nbsp;
+            {% endfor %}
+        </marquee>
     </div>
     {% endif %}
 
@@ -268,7 +290,10 @@
             <option value="vencido">Vencidos</option>
         </select>
     </div>
+</div>
 
+<!-- ÁREA DE TABELA VISÍVEL E DE IMPRESSÃO -->
+<div class="print-area container">
     <table>
         <thead>
             <tr>
@@ -278,14 +303,16 @@
                 <th>Qtd</th>
                 <th>Lote</th>
                 <th>Vencimento</th>
-                <th>Ações</th>
+                <th class="acoes">Ações</th>
             </tr>
         </thead>
         <tbody>
         {% for p in produtos %}
-            {% if p.dias_restantes < 91 %}
+            {% if p.dias_restantes < 30 %}
                 {% set classe = "vermelho" %}
-            {% elif p.dias_restantes < 366 %}
+            {% elif p.dias_restantes < 90 %}
+                {% set classe = "vermelho" %}
+            {% elif p.dias_restantes < 365 %}
                 {% set classe = "amarelo" %}
             {% else %}
                 {% set classe = "verde" %}
@@ -293,7 +320,7 @@
             <tr class="{{ classe }}" data-codigo="{{ p.codigo }}" data-descricao="{{ p.descricao }}" data-dias="{{ p.dias_restantes }}">
                 <td>
                     {% if p.foto %}
-                        <img src="{{ p.foto }}" alt="Foto">
+                        <img src="{{ url_for('static', filename='uploads/' ~ p.foto) }}">
                     {% else %}
                         Sem foto
                     {% endif %}
@@ -302,16 +329,15 @@
                 <td>{{ p.descricao }}</td>
                 <td>{{ p.quantidade }}</td>
                 <td>{{ p.lote }}</td>
-                <td>{{ p.vencimento.strftime('%d/%m/%Y') }}</td>
-                <td>
-                    <a href="#" class="btn btn-edit" onclick="pedirSenhaAntes(this)" data-url="{{ url_for('editar', id=p.id) }}">Editar</a>
-                    <a href="#" class="btn btn-delete" onclick="pedirSenhaAntes(this)" data-url="{{ url_for('excluir', id=p.id) }}">Excluir</a>
+                <td>{{ p.vencimento.strftime('%d/%m/%Y') if p.vencimento else '' }}</td>
+                <td class="acoes">
+                    <a href="{{ url_for('editar', id=p.id) }}" class="btn btn-edit">Editar</a>
+                    <a href="{{ url_for('confirmar_exclusao', id=p.id) }}" class="btn btn-delete">Excluir</a>
                 </td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
 </div>
-
 </body>
 </html>
